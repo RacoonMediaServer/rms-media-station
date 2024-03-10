@@ -1,0 +1,133 @@
+version: '3'
+services:
+  etcd:
+    image: bitnami/etcd
+    environment:
+      - ALLOW_NONE_AUTHENTICATION=yes
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd:2379,http://${INTERFACE_IP}:2379
+
+  mongo:
+    image: mongo
+    restart: always
+    container_name: mongo
+    volumes:
+      - ${DATA}/mongo/db:/data/db
+      - ${DATA}/mongo/dump:/dump  
+
+  postgres:
+    image: postgres:alpine
+    restart: always
+    container_name: postgres
+    volumes:
+      - ${DATA}/postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=rms
+      - POSTGRES_PASSWORD=qweasd123
+      - POSTGRES_DB=rms
+
+  web:
+    image: racoonmediaserver/web:latest
+    restart: always
+    container_name: web
+    ports:
+      - "80:8080"
+    volumes:
+      - ${MEDIA}/library:/media
+    environment:
+      - RMS_HTTP_HOST=0.0.0.0
+      - RMS_CCTV_ENABLED=false
+      - TZ=Europe/Moscow
+      - MICRO_REGISTRY=etcd
+      - MICRO_REGISTRY_ADDRESS=etcd:2379
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"     
+    depends_on:
+      - etcd
+
+  torrent:
+    image: racoonmediaserver/torrent:latest
+    restart: always
+    container_name: torrent
+    environment:
+      - RMS_DATABASE_HOST=postgres
+      - RMS_DATABASE_PASSWORD=qweasd123
+      - RMS_FUSE_ENABLED=true
+      - RMS_FUSE_CACHE-DIRECTORY=/media/library/cache
+      - MICRO_REGISTRY=etcd
+      - MICRO_REGISTRY_ADDRESS=etcd:2379
+    privileged: true
+    devices:
+      - /dev/fuse:/dev/fuse
+    volumes:
+      - ${MEDIA}/library/cache:/media/library/cache
+      - ./fuse.conf:/etc/fuse.conf:ro
+      - type: bind
+        source: ${MEDIA}/library/torrents
+        target: /media/library/torrents
+        bind:
+          propagation: rshared
+
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    depends_on:
+      - etcd
+
+  library:
+    image: racoonmediaserver/library:latest
+    restart: always
+    container_name: library
+    environment:
+      - RMS_DEVICE=${DEVICE}
+      - RMS_DATABASE=mongodb://mongo:27017/library
+      - RMS_FIX-TORRENT-PATH=true
+      - RMS_REMOTE_HOST=${REMOTE_HOST}
+      - RMS_REMOTE_PORT=${REMOTE_PORT}
+      - MICRO_BROKER_ADDRESS=0.0.0.0:5531
+      - MICRO_REGISTRY=etcd
+      - MICRO_REGISTRY_ADDRESS=etcd:2379
+    volumes:
+      - type: bind
+        source: ${MEDIA}/library
+        target: /media/library
+
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    depends_on:
+      - mongo
+      - etcd
+
+  notifier:
+    image: racoonmediaserver/notifier:latest
+    restart: always
+    container_name: notifier
+    environment:
+      - TZ=Europe/Moscow
+      - RMS_DEVICE=${DEVICE}
+      - RMS_DATABASE=mongodb://mongo:27017/notifier
+      - RMS_REMOTE_HOST=${REMOTE_HOST}
+      - RMS_REMOTE_PORT=${REMOTE_PORT}
+      - MICRO_BROKER_ADDRESS=0.0.0.0:5531
+      - MICRO_REGISTRY=etcd
+      - MICRO_REGISTRY_ADDRESS=etcd:2379
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    depends_on:
+      - mongo
+      - etcd
+
+  dlna:
+    container_name: dlna
+    build: ./serviio
+    restart: always
+    environment:
+      - RMS_IP_ADDR=${INTERFACE_IP}
+    volumes:
+      - ./serviio/config:/opt/serviio/config
+      - ${MEDIA}/library:/media/library
+    network_mode: "host"
+
+  watchtower:
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 30 --label-enable
