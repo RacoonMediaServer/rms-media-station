@@ -80,6 +80,7 @@ services:
       - RMS_DEVICE=${DEVICE}
       - RMS_DATABASE=mongodb://mongo:27017/library
       - RMS_FIX-TORRENT-PATH=true
+      - RMS_WAIT-TORRENT-READY=false
       - RMS_REMOTE_HOST=${REMOTE_HOST}
       - RMS_REMOTE_PORT=${REMOTE_PORT}
       - MICRO_BROKER_ADDRESS=0.0.0.0:5531
