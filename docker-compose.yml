@@ -2,6 +2,7 @@ version: '3'
 services:
   etcd:
     image: bitnami/etcd
+    restart: always
     environment:
       - ALLOW_NONE_AUTHENTICATION=yes
       - ETCD_ADVERTISE_CLIENT_URLS=http://etcd:2379,http://${INTERFACE_IP}:2379
