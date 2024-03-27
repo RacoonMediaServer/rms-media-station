@@ -119,17 +119,21 @@ services:
 
   dlna:
     container_name: dlna
-    build: ./serviio
+    image: giof71/minidlna
     restart: always
     environment:
-      - RMS_IP_ADDR=${INTERFACE_IP}
+      - MINIDLNA_ROOT_CONTAINER=V
+      - MINIDLNA_DIR_V_1=/media/library/movies
+      - MINIDLNA_ENABLE_INOTIFY=YES
+      - MINIDLNA_FRIENDLY_NAME=RacoonMediaServer
     volumes:
-      - ./serviio/config:/opt/serviio/config
       - ${MEDIA}/library:/media/library
+      - ${MEDIA}/dlna/cache:/db
     network_mode: "host"
 
   watchtower:
     image: containrrr/watchtower
+    restart: always
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     command: --interval 30 --label-enable
